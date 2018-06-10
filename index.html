@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>C# TwitterBot with RPC controlled Mbed by njack7</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">C# TwitterBot with RPC controlled Mbed</h1>
+      <h2 class="project-tagline">By Nydrel Jack and Barry Johnson-Smith</h2>
+      <a href="https://github.gatech.edu/njack7/twitterBot" class="btn">View on GitHub</a>
+    </section>
+
+    <section class="main-content">
+      <h1>
+<a id="project-description" class="anchor" href="#project-description" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Project Description</h1>
+<p>This project consists of a C# GUI application to query tweets from a specific account and control peripherals using Remote Procedure Calls (RPC) on an mbed. The application allows users to acquire tweets by username and store them in a Microsoft Excel spreadsheet on the local machine. RPC functions are used to print tweets selected in the GUI to an LCD and control status LEDs connected to the mbed.</p>
+<h1>
+<a id="demo" class="anchor" href="#demo" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Demo</h1>
+<p>Here's a short <a href="https://www.youtube.com/watch?v=-TVh-aDU-Tw">demo video</a> of the usage and functionality of the application</p>
+      <div align="center"><iframe width="840" height="473" src="https://www.youtube.com/embed/-TVh-aDU-Tw" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+<br>
+<br>
+<h2>
+<a id="used-hardware" class="anchor" href="#used-hardware" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Used Hardware</h2>
+<ul>
+<li><a href="https://os.mbed.com/platforms/mbed-LPC1768/">mbed LPC1768</a></li>
+<li><a href="https://www.sparkfun.com/products/105">RGB LED</a></li>
+<li>100 Ohm Resistors (3)</li>
+<li><a href="https://os.mbed.com/users/4180_1/notebook/ulcd-144-g2-128-by-128-color-lcd/">uLCD-144-G2 128 by 128 Smart Color LCD</a></li>
+</ul>
+<div align="center"><img src="https://github.gatech.edu/njack7/twitterBot/blob/master/mbed%20hardware.jpg?raw=true" alt="Hardware Setup" width="493" height="657"></div>
+<p>The 100 ohm resistors are connected to pins 22, 23, and 24. These correspond to the blue, green, and red leads on the RGB LED.</p>
+<p>The TX, RX, and Reset pins on the uLCD are connected to pins 28, 27, and 29 respectively.</p>
+<h2>
+<a id="writing-rpc-functions-for-the-mbed" class="anchor" href="#writing-rpc-functions-for-the-mbed" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Writing RPC functions for the mbed</h2>
+<p>RPC functions are objects that wrap functions that can be executed on the mbed through RPC. Below is the code that enables the mbed to listen for and execute instructions passed to it from the C# application. Click on <a href="https://os.mbed.com/teams/ECE-4180-Spring-18/code/rpc_mbedECE4180Project/">this link</a> to access the repository containing the mbed portion of the project. This <a href="https://os.mbed.com/users/nambvarun/notebook/rpc-tutorial/">tutorial</a> contains more information about the RPC library used in our code.</p>
+<div class="highlight highlight-source-c++"><pre>#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>mbed.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>mbed_rpc.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>uLCD_4DGL.h<span class="pl-pds">"</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">&lt;</span>ctype.h<span class="pl-pds">&gt;</span></span>
+#<span class="pl-k">include</span> <span class="pl-s"><span class="pl-pds">"</span>RGB_LED.h<span class="pl-pds">"</span></span>
+ 
+<span class="pl-c"><span class="pl-c">//</span>Use the RPC enabled wrapped class  - see RpcClasses.h for more info</span>
+Serial <span class="pl-en">pc</span>(USBTX, USBRX);
+PinName tx, rx, rst;
+RGBLed <span class="pl-en">myRGBled</span>(p22,p23,p24);
+uLCD_4DGL <span class="pl-en">uLCD</span>(p28, p27, p29);
+<span class="pl-k">char</span> text;
+<span class="pl-c"><span class="pl-c">//</span>string screen;</span>
+ 
+<span class="pl-k">void</span> <span class="pl-en">clearLCD</span>(Arguments *in, Reply *out);
+RPCFunction <span class="pl-en">rpcClear</span>(&amp;clearLCD, <span class="pl-s"><span class="pl-pds">"</span>clearLCD<span class="pl-pds">"</span></span>);
+ 
+<span class="pl-k">void</span> <span class="pl-en">printLCDAndLightRGB</span>(Arguments *in, Reply *out);
+RPCFunction <span class="pl-en">rpcPrintLCDAndLightRGB</span>(&amp;printLCDAndLightRGB, <span class="pl-s"><span class="pl-pds">"</span>printLCDAndLightRGB<span class="pl-pds">"</span></span>);
+  
+<span class="pl-k">int</span> <span class="pl-en">main</span>() {
+ 
+    <span class="pl-k">char</span> buf[<span class="pl-c1">256</span>], outbuf[<span class="pl-c1">256</span>];
+    <span class="pl-k">while</span>(<span class="pl-c1">1</span>) {
+        pc.<span class="pl-c1">gets</span>(buf, <span class="pl-c1">256</span>);
+        <span class="pl-c"><span class="pl-c">//</span>Call the static call method on the RPC class</span>
+        <span class="pl-c1">RPC::call</span>(buf, outbuf); 
+        pc.<span class="pl-c1">printf</span>(<span class="pl-s"><span class="pl-pds">"</span>%s<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>, outbuf);
+    }
+}
+ 
+<span class="pl-k">void</span> <span class="pl-en">clearLCD</span>(Arguments *in, Reply *out)
+{
+    uLCD.<span class="pl-c1">cls</span>();
+}
+ 
+<span class="pl-k">void</span> <span class="pl-en">printLCDAndLightRGB</span>(Arguments *in, Reply *out)
+{
+        uLCD.<span class="pl-c1">cls</span>();
+        <span class="pl-k">char</span> * text = in-&gt;getArg&lt;<span class="pl-k">char</span> *&gt;();
+        <span class="pl-k">int</span> value = <span class="pl-c1">strlen</span>(text);
+        <span class="pl-k">if</span>(text[<span class="pl-c1">0</span>] == <span class="pl-s"><span class="pl-pds">'</span>1<span class="pl-pds">'</span></span>){
+          myRGBled.<span class="pl-c1">write</span>(<span class="pl-c1">0</span>,<span class="pl-c1">1</span>.<span class="pl-c1">0f</span>,<span class="pl-c1">0</span>);
+          uLCD.<span class="pl-c1">printf</span>(<span class="pl-s"><span class="pl-pds">"</span>Tweet is found!<span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+          uLCD.<span class="pl-c1">printf</span>(<span class="pl-s"><span class="pl-pds">"</span><span class="pl-cce">\n</span><span class="pl-pds">"</span></span>);
+        } <span class="pl-k">else</span> <span class="pl-k">if</span>(text[<span class="pl-c1">0</span>] == <span class="pl-s"><span class="pl-pds">'</span>0<span class="pl-pds">'</span></span>){
+          myRGBled.<span class="pl-c1">write</span>(<span class="pl-c1">0</span>,<span class="pl-c1">0</span>,<span class="pl-c1">1</span>.<span class="pl-c1">0f</span>);
+        }
+        text[<span class="pl-c1">0</span>] = <span class="pl-s"><span class="pl-pds">'</span>-<span class="pl-pds">'</span></span>;
+        <span class="pl-k">for</span>(<span class="pl-k">int</span> i = <span class="pl-c1">0</span>; i&lt; value; i++) {
+            <span class="pl-k">if</span>(text[i] == <span class="pl-s"><span class="pl-pds">'</span>|<span class="pl-pds">'</span></span>) {
+               text[i] = <span class="pl-s"><span class="pl-pds">'</span> <span class="pl-pds">'</span></span>;   
+            }
+        }
+        uLCD.<span class="pl-c1">printf</span>(text);
+ }</pre></div>
+<hr>
+<h2>
+<a id="creating-the-c-gui-application" class="anchor" href="#creating-the-c-gui-application" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Creating the C# GUI Application</h2>
+<h3>
+<a id="step-1-download-the-visual-studio-solution-files" class="anchor" href="#step-1-download-the-visual-studio-solution-files" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 1: Download the Visual Studio Solution Files</h3>
+<p>Download the solution files provided <a href="https://github.gatech.edu/njack7/twitterBot/blob/master/CSharp%20TwitterBot.zip">here</a>, unzip, and open them in Visual Studio. Make sure to have .NET Framework 4.0 or higher installed.</p>
+<h3>
+<a id="step-2-adding-tweetinviapi-to-visual-studio-project" class="anchor" href="#step-2-adding-tweetinviapi-to-visual-studio-project" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 2: Adding TweetinviAPI to Visual Studio Project</h3>
+<p>Tweetinvi is already included in the Solution Files for this project. However, if you want to add the TweetinviAPI (or any other package) to your own project</p>
+<ol>
+<li>Open the Solution Explorer</li>
+<li>Right Click on 'References'</li>
+<li>Click 'Manage NuGet Packages'</li>
+<li>Under 'Browse' search Tweetinvi</li>
+<li>Install</li>
+</ol>
+<h3>
+<a id="step-3-twitter-account-and-oauth-credentials" class="anchor" href="#step-3-twitter-account-and-oauth-credentials" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 3: Twitter Account and OAuth Credentials</h3>
+<p>Twitter applications require special credentials to make API calls and Twitter warns developers that these keys "should never be human-readable in your application" and "Do not share your access token secret with anyone." Our credentials aren't included in the source code that we've provided. Below is a few lines of code from the 'App.config' file where a user can place their own unique credentials.</p>
+<div class="highlight highlight-source-cs"><pre>...
+&lt;configuration&gt;
+    &lt;appSettings&gt;
+      &lt;add key="cKey" value="your_cred" /&gt;
+      &lt;add key="cSecret" value="your_cred" /&gt;
+      &lt;add key="aKey" value="your_cred"/&gt;
+      &lt;add key="aSecret" value ="your_cred"/&gt;
+    &lt;/appSettings&gt;
+...</pre></div>
+<p>Head to <a href="https://apps.twitter.com/">Twitter</a> to create an application and generate the credentials to replace the lines containing "your_cred" in the App.config file. Visit the 'Keys and Access Tokens' tab to get the Consumer Key, Consumer Secret, Access Token, and Access Token Secret.
+These lines of code below in the source code for the Windows Form Authenticate the application</p>
+<div class="highlight highlight-source-cs"><pre><span class="pl-k">string</span> <span class="pl-en">ckey</span> = <span class="pl-en">ConfigurationManager.AppSettings</span>["cKey"];
+<span class="pl-k">string</span> <span class="pl-en">cSecret</span> = <span class="pl-en">ConfigurationManager.AppSettings</span>["cSecret"];
+<span class="pl-k">string</span> <span class="pl-en">aKey</span> = <span class="pl-en">ConfigurationManager.AppSettings</span>["aKey"];
+<span class="pl-k">string</span> <span class="pl-en">aSecret</span> = <span class="pl-en">ConfigurationManager.AppSettings</span>["aSecret"];
+
+<span class="pl-en">Auth.SetUserCredentials</span>(ckey,cSecret,aKey,aSecret);</pre></div>
+<h3>
+<a id="step-4-choose-path-for-spreadsheet" class="anchor" href="#step-4-choose-path-for-spreadsheet" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 4: Choose Path for spreadsheet</h3>
+<p>Change line 84 in the 'Form1.cs' source file and replace "YourDirectory" with the preferred location for the Microsoft Excel spreadsheet that will store the queried tweets.</p>
+<div class="highlight highlight-source-cs"><pre><span class="pl-en">xlWorkBook.SaveAs</span>(@"YourDirectory" + targetAccount + "_Report.xls", Excel.XlFileFormat.xlWorkbookNormal);
+<span class="pl-en">xlWorkBook.Close</span>();
+<span class="pl-en">xlApp.Quit</span>();</pre></div>
+<h3>
+<a id="step-5-build-and-run" class="anchor" href="#step-5-build-and-run" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 5: Build and run</h3>
+<p>Build the solution and run the application. Start searching for tweets!</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.gatech.edu/njack7/twitterBot">C# TwitterBot with RPC controlled Mbed</a> is maintained by <a href="https://github.gatech.edu/njack7">njack7</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
